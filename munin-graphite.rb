@@ -5,6 +5,7 @@
 # A Munin-Node to Graphite bridge
 #
 # Author:: Adam Jacob (<adam@hjksolutions.com>)
+# Author:: Omry Yadan (<omry@yadan.net>)
 # Copyright:: Copyright (c) 2008 HJK Solutions, LLC
 # License:: GNU General Public License version 2 or later
 # 
