@@ -26,84 +26,127 @@
 require 'socket'
 
 class Munin
-  def initialize(host='localhost', port=4949)
-    @munin = TCPSocket.new(host, port)
-    @munin.gets
-  end
-  
-  def get_response(cmd)
-    @munin.puts(cmd)
-    stop = false 
-    response = Array.new
-    while stop == false
-      line = @munin.gets
-      line.chomp!
-      if line == '.'
-        stop = true
-      else
-        response << line 
-        stop = true if cmd == "list"
-      end
-    end
-    response
-  end
-  
-  def close
-    @munin.close
-  end
+	def initialize(host='localhost', port=4949)
+		@munin = TCPSocket.new(host, port)
+		@munin.gets
+	end
+
+	def get_response(cmd)
+		@munin.puts(cmd)
+		stop = false 
+		response = Array.new
+		while stop == false
+			line = @munin.gets
+			line.chomp!
+			if line == '.'
+				stop = true
+			else
+				response << line 
+				stop = true if cmd == "list"
+			end
+		end
+		response
+	end
+
+	def close
+		@munin.close
+	end
 end
 
 class Carbon
-  def initialize(host='localhost', port=2003)
-    @carbon = TCPSocket.new(host, port)
-  end
-  
-  def send(msg)
-    @carbon.puts(msg)
-  end
-  
-  def close
-    @carbon.close
-  end
+	def initialize(host='localhost', port=2003)
+		@carbon = TCPSocket.new(host, port)
+	end
+
+	def send(msg)
+		@carbon.puts(msg)
+	end
+
+	def close
+		@carbon.close
+	end
 end
 
+def log(msg)
+	puts "#{msg}"
+	$stdout.flush
+end
+
+munin_host = "localhost"
+munin_port = 4949
+carbon_host = ARGV[0]
+if !carbon_host
+	log("Carbon host not specified, using localhost")
+	carbon_host = "localhost"
+end
+carbon_port = 2003
+interval = 5*60
+log("Forwarding stats from munin #{munin_host}:#{munin_port} to carbon #{carbon_host}:#{carbon_port} every #{interval} seconds")
+
+munin_error = false
+carbon_error = false
 while true
-  metric_base = "servers."
-  all_metrics = Array.new
+	metric_base = "servers."
+	all_metrics = Array.new
 
-  munin = Munin.new(ARGV[0])
-  munin.get_response("nodes").each do |node|
-    metric_base << node.split(".").reverse.join(".")
-    puts "Doing #{metric_base}"
-    munin.get_response("list")[0].split(" ").each do |metric|
-      puts "Grabbing #{metric}"
-      mname = "#{metric_base}"
-      has_category = false
-      base = false
-      munin.get_response("config #{metric}").each do |configline|
-        if configline =~ /graph_category (.+)/
-          mname << ".#{$1}"
-          has_category = true
-        end
-        if configline =~ /graph_args.+--base (\d+)/
-          base = $1
-        end
-      end
-      mname << ".other" unless has_category
-      munin.get_response("fetch #{metric}").each do |line|
-        line =~ /^(.+)\.value\s+(.+)$/
-        field = $1
-        value = $2
-        all_metrics << "#{mname}.#{metric}.#{field} #{value} #{Time.now.to_i}"
-      end
-    end
-  end
+	begin
+		munin = Munin.new(munin_host, munin_port)
+		if munin_error
+			log("Connection to munin re-established")
+			munin_error = false
+		end
+		munin.get_response("nodes").each do |node|
+			metric_base << node.split(".").reverse.join(".")
+			#puts "Doing #{metric_base}"
+			munin.get_response("list")[0].split(" ").each do |metric|
+				#puts "Grabbing #{metric}"
+				mname = "#{metric_base}"
+				has_category = false
+				base = false
+				munin.get_response("config #{metric}").each do |configline|
+					if configline =~ /graph_category (.+)/
+						mname << ".#{$1}"
+						has_category = true
+					end
+					if configline =~ /graph_args.+--base (\d+)/
+						base = $1
+					end
+				end
+				mname << ".other" unless has_category
+				munin.get_response("fetch #{metric}").each do |line|
+					line =~ /^(.+)\.value\s+(.+)$/
+						field = $1
+					value = $2
+					all_metrics << "#{mname}.#{metric}.#{field} #{value} #{Time.now.to_i}"
+				end
+			end
+		end
+	rescue => e
+		if !munin_error
+			log("Error communicating with munin: #{e.message}")
+			munin_error = true
+		end
+		sleep interval
+		next
+	end
 
-  carbon = Carbon.new(ARGV[1])
-  all_metrics.each do |m|
-    puts "Sending #{m}"
-    carbon.send(m)
-  end
-  sleep 60
+	begin
+		carbon = Carbon.new(carbon_host,carbon_port)
+		if carbon_error
+			log("Connection to carbon re-established")
+			carbon_error = false
+		end
+		all_metrics.each do |m|
+			#puts "Sending #{m}"
+			carbon.send(m)
+		end
+	rescue => e
+		if !carbon_error
+			log("Error communicating with carbon : #{e.message}")
+			carbon_error = true
+		end
+	end
+	sleep interval
+
 end
 
