@@ -25,6 +25,7 @@
 # 
 
 require 'socket'
+require 'syslog'
 
 class Munin
 	def initialize(host='localhost', port=4949)
@@ -68,21 +69,31 @@ class Carbon
 	end
 end
 
-def log(msg)
-	puts "#{msg}"
-	$stdout.flush
+def error(msg)
+	puts "error : #{msg}"
+	Syslog.open($0, Syslog::LOG_PID | Syslog::LOG_CONS) { |s| s.err msg }
+end
+
+def warn(msg)
+	puts "warn : #{msg}"
+	Syslog.open($0, Syslog::LOG_PID | Syslog::LOG_CONS) { |s| s.warning msg }
+end
+
+def info(msg)
+	puts "info : #{msg}"
+	Syslog.open($0, Syslog::LOG_PID | Syslog::LOG_CONS) { |s| s.info msg }
 end
 
 munin_host = "localhost"
 munin_port = 4949
 carbon_host = ARGV[0]
 if !carbon_host
-	log("Carbon host not specified, using localhost")
+	info("Carbon host not specified, using localhost")
 	carbon_host = "localhost"
 end
 carbon_port = 2003
 interval = 5*60
-log("Forwarding stats from munin #{munin_host}:#{munin_port} to carbon #{carbon_host}:#{carbon_port} every #{interval} seconds")
+info("Forwarding stats from munin #{munin_host}:#{munin_port} to carbon #{carbon_host}:#{carbon_port} every #{interval} seconds")
 
 munin_error = false
 carbon_error = false
@@ -93,9 +104,10 @@ while true
 	begin
 		munin = Munin.new(munin_host, munin_port)
 		if munin_error
-			log("Connection to munin re-established")
+			info("Connection to munin re-established")
 			munin_error = false
 		end
+		info("Sending munin stats to #{carbon_host}:#{carbon_port}")
 		munin.get_response("nodes").each do |node|
 			metric_base << node.split(".").reverse.join(".")
 			#puts "Doing #{metric_base}"
@@ -124,7 +136,7 @@ while true
 		end
 	rescue => e
 		if !munin_error
-			log("Error communicating with munin: #{e.message}")
+			error("Error communicating with munin: #{e.message}")
 			munin_error = true
 		end
 		sleep interval
@@ -134,7 +146,7 @@ while true
 	begin
 		carbon = Carbon.new(carbon_host,carbon_port)
 		if carbon_error
-			log("Connection to carbon re-established")
+			info("Connection to carbon re-established")
 			carbon_error = false
 		end
 		all_metrics.each do |m|
@@ -143,7 +155,7 @@ while true
 		end
 	rescue => e
 		if !carbon_error
-			log("Error communicating with carbon : #{e.message}")
+			error("Error communicating with carbon : #{e.message}")
 			carbon_error = true
 		end
 	end
