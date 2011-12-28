@@ -160,6 +160,8 @@ while true
 			error("Error communicating with carbon : #{e.message}")
 			carbon_error = true
 		end
+	ensure
+		carbon.close
 	end
 	sleep interval
 
