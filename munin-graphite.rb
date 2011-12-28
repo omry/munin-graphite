@@ -141,6 +141,8 @@ while true
 		end
 		sleep interval
 		next
+	ensure
+		munin.close
 	end
 
 	begin
