@@ -145,13 +145,14 @@ while true
 			metric_base << node.split(".").reverse.join(".")
 			#puts "Doing #{metric_base}"
 			munin.get_response("list")[0].split(" ").each do |metric|
+				metric = metric.gsub(' ','_')
 				#puts "Grabbing #{metric}"
 				mname = "#{metric_base}"
 				has_category = false
 				base = false
 				munin.get_response("config #{metric}").each do |configline|
 					if configline =~ /graph_category (.+)/
-						mname << ".#{$1}"
+						mname << ".#{$1}".gsub(' ','_')
 						has_category = true
 					end
 					if configline =~ /graph_args.+--base (\d+)/
@@ -162,8 +163,9 @@ while true
 				t = Time.now.to_f
 				munin.get_response("fetch #{metric}").each do |line|
 					line =~ /^(.+)\.value\s+(.+)$/
-						field = $1
+					field = $1
 					value = $2
+					field = field.gsub(' ','_')
 					all_metrics << "#{mname}.#{metric}.#{field} #{value} #{Time.now.to_i}"
 				end
 
