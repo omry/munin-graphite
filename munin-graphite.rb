@@ -28,15 +28,15 @@ require 'socket'
 require 'syslog'
 require 'optparse'
 
-options = {}
+$options = {}
 optparse = OptionParser.new do|opts|
 	# Set a banner, displayed at the top
 	# of the help screen.
 	opts.banner = "Munin to Graphite bridge"
 
-	options[:verbose] = false
+	$options[:verbose] = false
 	opts.on( '-v', '--verbose', 'Output more information' ) do
-		options[:verbose] = true
+		$options[:verbose] = true
 	end
 
 	opts.on( '-h', '--help', 'Display this screen' ) do
@@ -109,7 +109,7 @@ def sleep1(interval, elapsed)
 		warn("Fetching munin data took #{elapsed} > interval = #{interval} ms")
 	else
 		s = interval - elapsed
-		if (options[:verbose])
+		if ($options[:verbose])
 			info("Sleeping #{s} seconds")
 		end
 		sleep s
@@ -167,7 +167,7 @@ while true
 					all_metrics << "#{mname}.#{metric}.#{field} #{value} #{Time.now.to_i}"
 				end
 
-				if (options[:verbose])
+				if ($options[:verbose])
 					info("Fetching #{metric} took #{(Time.now.to_f - t)} seconds")
 				end
 			end
@@ -197,7 +197,7 @@ while true
 			carbon_error = false
 		end
 		all_metrics.each do |m|
-			if (options[:verbose])
+			if ($options[:verbose])
 				puts "Sending #{m}"
 			end
 			carbon.send(m)
