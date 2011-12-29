@@ -26,6 +26,26 @@
 
 require 'socket'
 require 'syslog'
+require 'optparse'
+
+options = {}
+optparse = OptionParser.new do|opts|
+	# Set a banner, displayed at the top
+	# of the help screen.
+	opts.banner = "Munin to Graphite bridge"
+
+	options[:verbose] = false
+	opts.on( '-v', '--verbose', 'Output more information' ) do
+		options[:verbose] = true
+	end
+
+	opts.on( '-h', '--help', 'Display this screen' ) do
+		puts opts
+		exit
+	end
+end
+
+optparse.parse!
 
 class Munin
 	def initialize(host='localhost', port=4949)
@@ -89,7 +109,9 @@ def sleep1(interval, elapsed)
 		warn("Fetching munin data took #{elapsed} > interval = #{interval} ms")
 	else
 		s = interval - elapsed
-		#info("Sleeping #{s} seconds")
+		if (options[:verbose])
+			info("Sleeping #{s} seconds")
+		end
 		sleep s
 	end
 end
@@ -144,7 +166,10 @@ while true
 					value = $2
 					all_metrics << "#{mname}.#{metric}.#{field} #{value} #{Time.now.to_i}"
 				end
-				#info("Fetching #{metric} took #{(Time.now.to_f - t)} seconds")
+
+				if (options[:verbose])
+					info("Fetching #{metric} took #{(Time.now.to_f - t)} seconds")
+				end
 			end
 		end
 	rescue => e
@@ -172,7 +197,9 @@ while true
 			carbon_error = false
 		end
 		all_metrics.each do |m|
-			#puts "Sending #{m}"
+			if (options[:verbose])
+				puts "Sending #{m}"
+			end
 			carbon.send(m)
 		end
 	rescue => e
