@@ -84,6 +84,16 @@ def info(msg)
 	Syslog.open($0, Syslog::LOG_PID | Syslog::LOG_CONS) { |s| s.info msg }
 end
 
+def sleep1(interval, elapsed)
+	if (elapsed >= interval)
+		warn("Fetching munin data took #{elapsed} > interval = #{interval} ms")
+	else
+		s = interval - elapsed
+		#info("Sleeping #{s} seconds")
+		sleep s
+	end
+end
+
 munin_host = "localhost"
 munin_port = 4949
 carbon_host = ARGV[0]
@@ -98,6 +108,7 @@ info("Forwarding stats from munin #{munin_host}:#{munin_port} to carbon #{carbon
 munin_error = false
 carbon_error = false
 while true
+	fetch_start = Time.now.to_f
 	metric_base = "servers."
 	all_metrics = Array.new
 
@@ -107,7 +118,7 @@ while true
 			info("Connection to munin re-established")
 			munin_error = false
 		end
-		info("Sending munin stats to #{carbon_host}:#{carbon_port}")
+		mname = "unknown"
 		munin.get_response("nodes").each do |node|
 			metric_base << node.split(".").reverse.join(".")
 			#puts "Doing #{metric_base}"
@@ -126,12 +137,14 @@ while true
 					end
 				end
 				mname << ".other" unless has_category
+				t = Time.now.to_f
 				munin.get_response("fetch #{metric}").each do |line|
 					line =~ /^(.+)\.value\s+(.+)$/
 						field = $1
 					value = $2
 					all_metrics << "#{mname}.#{metric}.#{field} #{value} #{Time.now.to_i}"
 				end
+				#info("Fetching #{metric} took #{(Time.now.to_f - t)} seconds")
 			end
 		end
 	rescue => e
@@ -139,12 +152,19 @@ while true
 			error("Error communicating with munin: #{e.message}")
 			munin_error = true
 		end
-		sleep interval
+		fetch_end = Time.now.to_i
+		elapsed = fetch_end - fetch_start
+		sleep1(interval,elapsed)
 		next
 	ensure
 		munin.close
 	end
 
+	fetch_end = Time.now.to_i
+	elapsed = fetch_end - fetch_start
+	info("Sending munin stats to #{carbon_host}:#{carbon_port}, fetch took #{elapsed}")
+
+	all_metrics << "#{mname}.munin_fetch_time #{elapsed} #{Time.now.to_i}"
 	begin
 		carbon = Carbon.new(carbon_host,carbon_port)
 		if carbon_error
@@ -161,9 +181,11 @@ while true
 			carbon_error = true
 		end
 	ensure
-		carbon.close
+		if (carbon)
+			carbon.close
+		end
 	end
-	sleep interval
+	sleep1(interval, elapsed)
 
 end
 
