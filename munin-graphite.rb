@@ -71,7 +71,9 @@ class Munin
 	end
 
 	def close
-		@munin.close
+		if $munin
+			@munin.close
+		end
 	end
 end
 
@@ -85,7 +87,9 @@ class Carbon
 	end
 
 	def close
-		@carbon.close
+		if $carbon
+			@carbon.close
+		end
 	end
 end
 
@@ -106,7 +110,7 @@ end
 
 def sleep1(interval, elapsed)
 	if (elapsed >= interval)
-		warn("Fetching munin data took #{elapsed} > interval = #{interval} ms")
+		warn("Fetching munin data took #{"%.2f" % elapsed} > interval = #{interval} ms")
 	else
 		s = interval - elapsed
 		if ($options[:verbose])
@@ -143,10 +147,14 @@ while true
 		mname = "unknown"
 		munin.get_response("nodes").each do |node|
 			metric_base << node.split(".").reverse.join(".")
-			#puts "Doing #{metric_base}"
+#			if ($options[:verbose])
+#				info("Doing #{metric_base}")
+#			end
 			munin.get_response("list")[0].split(" ").each do |metric|
 				metric = metric.gsub(' ','_')
-				#puts "Grabbing #{metric}"
+#				if ($options[:verbose])
+#					info("Grabbing #{metric}")
+#				end
 				mname = "#{metric_base}"
 				has_category = false
 				base = false
@@ -162,21 +170,26 @@ while true
 				mname << ".other" unless has_category
 				t = Time.now.to_f
 				munin.get_response("fetch #{metric}").each do |line|
-					line =~ /^(.+)\.value\s+(.+)$/
-					field = $1
-					value = $2
-					field = field.gsub(' ','_')
-					all_metrics << "#{mname}.#{metric}.#{field} #{value} #{Time.now.to_i}"
+					if not line.match(/^#/)
+						line =~ /^(.+)\.value\s+(.+)$/
+							field = $1
+						value = $2
+						field = field.gsub(' ','_')
+						all_metrics << "#{mname}.#{metric}.#{field} #{value} #{Time.now.to_i}"
+					else
+						error("Error processing #{metric} : #{line}")
+					end
 				end
 
 				if ($options[:verbose])
-					info("Fetching #{metric} took #{(Time.now.to_f - t)} seconds")
+					info("Fetching #{metric} took #{"%.2f" % (Time.now.to_f - t)} seconds")
 				end
 			end
 		end
 	rescue => e
 		if !munin_error
 			error("Error communicating with munin: #{e.message}")
+			
 			munin_error = true
 		end
 		fetch_end = Time.now.to_i
@@ -184,12 +197,14 @@ while true
 		sleep1(interval,elapsed)
 		next
 	ensure
-		munin.close
+		if munin
+			munin.close
+		end
 	end
 
 	fetch_end = Time.now.to_i
 	elapsed = fetch_end - fetch_start
-	info("Sending munin stats to #{carbon_host}:#{carbon_port}, fetch took #{elapsed}")
+	info("Sending munin stats to #{carbon_host}:#{carbon_port}, fetch took #{"%.2f" % elapsed}")
 
 	all_metrics << "#{mname}.munin_fetch_time #{elapsed} #{Time.now.to_i}"
 	begin
@@ -200,7 +215,7 @@ while true
 		end
 		all_metrics.each do |m|
 			if ($options[:verbose])
-				puts "Sending #{m}"
+				info("Sending #{m}")
 			end
 			carbon.send(m)
 		end
