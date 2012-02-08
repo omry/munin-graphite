@@ -59,12 +59,16 @@ class Munin
 		response = Array.new
 		while stop == false
 			line = @munin.gets
-			line.chomp!
-			if line == '.'
-				stop = true
+			if line != nil
+				line.chomp!
+				if line == '.'
+					stop = true
+				else
+					response << line 
+					stop = true if cmd == "list"
+				end
 			else
-				response << line 
-				stop = true if cmd == "list"
+				error("Nil line received from munin in response to #{cmd}")
 			end
 		end
 		response
