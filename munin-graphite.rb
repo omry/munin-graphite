@@ -178,8 +178,12 @@ while true
 						line =~ /^(.+)\.value\s+(.+)$/
 							field = $1
 						value = $2
-						field = field.gsub(' ','_')
-						all_metrics << "#{mname}.#{metric}.#{field} #{value} #{Time.now.to_i}"
+						if (field != nil)
+							field = field.gsub(' ','_')
+							all_metrics << "#{mname}.#{metric}.#{field} #{value} #{Time.now.to_i}"
+						else
+							warn("Invalid line for #{metric} : '#{line}'")
+						end
 					else
 						error("Error processing #{metric} : #{line}")
 					end
