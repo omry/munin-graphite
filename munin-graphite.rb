@@ -69,6 +69,7 @@ class Munin
 				end
 			else
 				error("Nil line received from munin in response to #{cmd}")
+                raise EOFError.new("Nil line received from munin in response to #{cmd}")
 			end
 		end
 		response
